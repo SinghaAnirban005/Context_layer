@@ -1,0 +1,98 @@
+# Context Layer for Agents
+
+A minimal, dependency light TypeScript implementation of the HLD:
+
+```
+Structured/Unstructured Data → Parser & Normalizer → Privacy Filter
+      → [Deterministic Path | Embedding Pipeline] → Agent → Action Evaluator
+      → Safe Path → System Execute / Human in the loop
+```
+
+This prototype implements the **deterministic side** of the diagram end-to-end
+(Privacy Filter → Deterministic Path / Redis-style preferences store →
+Context Conflict Engine → Action Evaluator → Safe Path). The Embedding
+Pipeline / Vector DB branch is intentionally out of scope — it needs a real
+embedding model and vector store, which conflicts with the "zero paid API
+keys, zero external dependencies" constraint. Swapping it in later just means
+adding a sibling to `runRouter` that also feeds into `contextItems`.
+
+## Architecture → Code Mapping
+
+| Diagram stage | File |
+|---|---|
+| Structured/Unstructured Data ingestion | `src/sampleData.ts` (`DataArtifact[]`) |
+| Privacy Filter | `src/privacyGate.ts` |
+| Deterministic Path (global preferences) | `src/preferenceExtractor.ts` |
+| Context Conflict Engine (staleness) | `src/router.ts` (topicId-scoped resolver) |
+| Agent → Action Evaluator Engine | `src/governance.ts` |
+| Safe Path / Human in the loop | `evaluateAction()` → `STATUS: EXECUTED` \| `STATUS: AWAITING_HUMAN_APPROVAL` |
+| System Execute | orchestrated by `src/pipeline.ts` |
+
+### Preferences are global state, not topic-scoped data
+
+`preference` artifacts are isolated in `preferenceExtractor.ts`, immediately
+after the Privacy Gate and *before* anything touches `topicId`. They never
+enter the Context Conflict Engine, so they can't collide with, shadow, or be
+dropped by an unrelated event that happens to share a `topicId`. They
+accumulate into a single global `UserPreferencesState`:
+
+```ts
+interface UserPreferencesState {
+  notes: string[];              // freeform string preferences, deduped
+  settings: Record<string, any>; // structured preferences, merged by key (last-write-wins)
+}
+```
+
+This state is injected at the **root** of the final markdown wrapper, in its
+own `[Global User Preferences]` block, structurally above and separate from
+`[Resolved Context Items]` — it's ambient config for the whole response, not
+"one topic among others."
+
+## Run it
+
+```bash
+npm install
+npm test        # runs validate.ts via tsx, prints ✓ Pass assertions
+npm start        # runs index.ts, prints the assembled prompt context
+npm run build    # compiles to dist/ with tsc
+```
+
+## Run it in Docker
+
+```bash
+docker build -t context-layer .
+docker run --rm context-layer                    # runs validate.ts (default)
+docker run --rm context-layer node dist/index.js # runs the plain demo instead
+```
+
+## What `validate.ts` proves
+
+1. **Privacy Gate** — the private Jira ticket (Item C) is blocked and counted
+   as a security exclusion; it never reaches `contextItems`.
+2. **Staleness Resolver** — Item B (email, created yesterday) and Item A
+   (Slack, created today) share a `topicId`; the stale email is dropped and
+   its ID recorded in `droppedStaleIds`.
+3. **Preference Isolation (Deterministic Fast-Path)** — Item D (string
+   preference) and Item E (structured preference) are isolated during
+   early extraction, before any `topicId` logic runs. They accumulate
+   into the global `userPreferences` state (`notes` + `settings`) and are
+   injected at the root of `finalPromptContext`, independent of their own
+   `topicId` values.
+4. **Action Governance** — a mutating action (`send_email`) is intercepted
+   and flagged `AWAITING_HUMAN_APPROVAL`; a read-only action (`query_status`)
+   is flagged `EXECUTED`.
+
+## Design notes / known edge cases
+
+- **Timestamp comparison** uses `new Date(x).getTime()`, which correctly
+  orders ISO 8601 strings regardless of millisecond precision or timezone
+  offset — string comparison alone would break on non-padded or
+  offset-suffixed timestamps.
+- **Unrecognized action operations** fail safe: if an operation doesn't
+  match a known mutating or read-only prefix, governance defaults to
+  `AWAITING_HUMAN_APPROVAL` rather than assuming it's safe.
+- **Preferences never carry topicId semantics.** String preferences are
+  deduplicated into `notes`; object preferences are shallow-merged into
+  `settings` by their own keys, last-write-wins — so re-stating the same
+  setting later cleanly overwrites the old value, matching how a global
+  config object should behave.
