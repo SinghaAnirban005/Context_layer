@@ -1,4 +1,4 @@
-import type { DataArtifact, RoutingResult } from './types';
+import type { DataArtifact, ConflictResolutionResult } from './types';
 
 /**
  * Routing & Resolution Layer
@@ -14,22 +14,9 @@ import type { DataArtifact, RoutingResult } from './types';
  *    one artifact shares a topicId only the most recently created one
  *    survives older duplicates are dropped and their IDs recorded.
  */
-export function runRouter(artifacts: DataArtifact[]): RoutingResult {
-  const preferences: Record<string, string | Record<string, any>> = {};
-  const nonPreferenceArtifacts: DataArtifact[] = [];
-
-  // Deterministic fast path split
-  for (const artifact of artifacts) {
-    if (artifact.source === 'preference') {
-      preferences[artifact.topicId] = artifact.content;
-    } else {
-      nonPreferenceArtifacts.push(artifact);
-    }
-  }
-
-  // Conflict & staleness resolution grouped by topicId
+export function resolveConflicts(artifacts: DataArtifact[]): ConflictResolutionResult {
   const byTopic = new Map<string, DataArtifact[]>();
-  for (const artifact of nonPreferenceArtifacts) {
+  for (const artifact of artifacts) {
     const bucket = byTopic.get(artifact.topicId);
     if (bucket) {
       bucket.push(artifact);
@@ -38,12 +25,12 @@ export function runRouter(artifacts: DataArtifact[]): RoutingResult {
     }
   }
 
-  const contextItems: DataArtifact[] = [];
+  const resolved: DataArtifact[] = [];
   const droppedStaleIds: string[] = [];
 
   for (const bucket of byTopic.values()) {
     if (bucket.length === 1) {
-      contextItems.push(bucket[0] as DataArtifact);
+      resolved.push(bucket[0] as DataArtifact);
       continue;
     }
 
@@ -52,9 +39,9 @@ export function runRouter(artifacts: DataArtifact[]): RoutingResult {
     );
 
     const [freshest, ...stale] = sorted;
-    contextItems.push(freshest as DataArtifact);
+    resolved.push(freshest as DataArtifact);
     droppedStaleIds.push(...stale.map((item) => item.id));
   }
 
-  return { contextItems, preferences, droppedStaleIds };
+  return { resolved, droppedStaleIds };
 }

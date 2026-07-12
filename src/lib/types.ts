@@ -24,16 +24,18 @@ export interface ConflictResolutionResult {
   droppedStaleIds: string[];
 }
 
-export interface RoutingResult {
-  contextItems: DataArtifact[];
-  preferences: Record<string, string | Record<string, any>>;
-  droppedStaleIds: string[];
+/**
+ * Global, structural preference state —> deliberately NOT keyed by topicId.
+ */
+export interface UserPreferencesState {
+  notes: string[];
+  settings: Record<string, any>;
 }
 
 export interface PipelineResult {
   finalPromptContext: string;
   contextItems: DataArtifact[];
-  preferences: Record<string, string | Record<string, any>>;
+  userPreferences: UserPreferencesState;
   securityExclusionCount: number;
   blockedArtifacts: DataArtifact[];
   droppedStaleIds: string[];

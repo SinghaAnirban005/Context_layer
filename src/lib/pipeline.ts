@@ -1,25 +1,24 @@
-import type { DataArtifact, PipelineResult } from './types.js';
+import type { DataArtifact, PipelineResult, UserPreferencesState } from './types.js';
 import { runPrivacyGate } from './privacyGate';
-import { runRouter } from './router.js';
-
+import { resolveConflicts } from './router.js';
+import {extractPreferences} from "./preferanceExtractor.js"
 /**
  * Runs the full Context Layer pipeline:
  *   ingestion buffer -> Privacy Gate -> Routing/Resolution -> prompt assembly
  */
 export function runPipeline(ingestionBuffer: DataArtifact[]): PipelineResult {
-  // Privacy Gate
   const { allowed, blocked, securityExclusionCount } = runPrivacyGate(ingestionBuffer);
 
-  // Routing & Resolution
-  const { contextItems, preferences, droppedStaleIds } = runRouter(allowed);
+  const { remaining, userPreferences } = extractPreferences(allowed);
 
-  // Final prompt assembly
-  const finalPromptContext = buildPromptContext(contextItems, preferences);
+  const { resolved: contextItems, droppedStaleIds } = resolveConflicts(remaining);
+
+  const finalPromptContext = buildPromptContext(contextItems, userPreferences);
 
   return {
     finalPromptContext,
     contextItems,
-    preferences,
+    userPreferences,
     securityExclusionCount,
     blockedArtifacts: blocked,
     droppedStaleIds,
@@ -28,20 +27,25 @@ export function runPipeline(ingestionBuffer: DataArtifact[]): PipelineResult {
 
 function buildPromptContext(
   contextItems: DataArtifact[],
-  preferences: Record<string, string | Record<string, any>>
+  userPreferences: UserPreferencesState
 ): string {
   const lines: string[] = [];
 
   lines.push('### SYSTEM CONTEXT ###');
 
-  lines.push('\n[User Preferences — always injected]');
-  const prefEntries = Object.entries(preferences);
-  if (prefEntries.length === 0) {
+  lines.push('\n[Global User Preferences]');
+  const { notes, settings } = userPreferences;
+  const settingsEntries = Object.entries(settings);
+
+  if (notes.length === 0 && settingsEntries.length === 0) {
     lines.push('(none)');
   } else {
-    for (const [topicId, content] of prefEntries) {
-      const rendered = typeof content === 'string' ? content : JSON.stringify(content);
-      lines.push(`- [${topicId}] ${rendered}`);
+    for (const note of notes) {
+      lines.push(`- ${note}`);
+    }
+    for (const [key, value] of settingsEntries) {
+      const rendered = typeof value === 'string' ? value : JSON.stringify(value);
+      lines.push(`- ${key}: ${rendered}`);
     }
   }
 

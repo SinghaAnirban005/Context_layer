@@ -38,4 +38,12 @@ export const sampleArtifacts: DataArtifact[] = [
     isPrivate: false,
     createdAt: today.toISOString(),
   },
+  {
+    id: 'artifact-e-preference-structured',
+    source: 'preference',
+    topicId: 'notification-config',
+    content: { notifyOnMention: true, digestFrequency: 'daily' },
+    isPrivate: false,
+    createdAt: today.toISOString(),
+  },
 ];
