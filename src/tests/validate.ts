@@ -22,7 +22,6 @@ const result = runPipeline(sampleArtifacts);
 console.log(result.finalPromptContext);
 console.log('\n--- Assertions ---\n');
 
-// Private ticket (Item C) was blocked by the Privacy Gate
 try {
   assert.equal(result.securityExclusionCount, 1);
   assert.ok(result.blockedArtifacts.some((a) => a.id === 'artifact-c-jira'));
@@ -35,7 +34,6 @@ try {
   fail('Private Jira ticket should be blocked', err);
 }
 
-// Stale email (Item B) was dropped in favor of the fresher Slack message (Item A)
 try {
   assert.ok(result.droppedStaleIds.includes('artifact-b-email'));
   assert.ok(result.contextItems.some((a) => a.id === 'artifact-a-slack'));
@@ -45,19 +43,21 @@ try {
   fail('Staleness resolution failed', err);
 }
 
-// 3. Preference (Item D) was injected directly into the final prompt/system context,
-//    bypassing the conflict resolver and contextItems array entirely.
 try {
-  assert.equal(result.preferences['response-style'], 'User prefers concise text outputs.');
+  assert.ok(result.userPreferences.notes.includes('User prefers concise text outputs.'));
   assert.ok(!result.contextItems.some((a) => a.id === 'artifact-d-preference'));
+  assert.ok(result.finalPromptContext.includes('[Global User Preferences]'));
   assert.ok(result.finalPromptContext.includes('User prefers concise text outputs.'));
-  pass('Preference (Item D) injected into final context via deterministic fast-path');
+
+  assert.ok(!result.contextItems.some((a) => a.topicId === 'response-style'));
+  assert.equal(result.userPreferences.settings.notifyOnMention, true);
+  assert.equal(result.userPreferences.settings.digestFrequency, 'daily');
+  assert.ok(!result.contextItems.some((a) => a.topicId === 'notification-config'));
+  pass('Preference (Item D) isolated at extraction and injected as global userPreferences (root-level, topicId-independent)');
 } catch (err) {
-  fail('Preference fast-path failed', err);
+  fail('Global preference extraction failed', err);
 }
 
-// 4. Action governance --> destructive action requires human approval,
-//    read only action executes immediately.
 try {
   const destructive: ActionPayload = { operation: 'send_email', params: { to: 'team@example.com' } };
   const destructiveResult = evaluateAction(destructive);
