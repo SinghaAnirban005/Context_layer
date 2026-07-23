@@ -1,10 +1,5 @@
 import type { DataArtifact, PrivacyGateResult } from './types.js';
 
-/**
- * Intercepts ingestion. Any artifact with isPrivate === true is dropped
- * immediately and never allowed further into the pipeline. We track both
- * the count and the full blocked records.
- */
 export function runPrivacyGate(artifacts: DataArtifact[]): PrivacyGateResult {
   const allowed: DataArtifact[] = [];
   const blocked: DataArtifact[] = [];

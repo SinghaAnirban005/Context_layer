@@ -1,15 +1,5 @@
 import type { ActionPayload, ActionGovernanceResult } from './types';
 
-/**
- * Any operation that mutates state (writes, sends, deletes, updates,
- * creates) must be intercepted and routed to a human before it can run.
- * Pure read only operations are allowed to execute immediately.
- *
- * The matcher is intentionally conservative: it matches on verb prefixes
- * rather than an explicit allowlist of read-only ops, so unknown/future
- * operations fail safe (i.e. default to requiring approval) unless they
- * are recognizably read only.
- */
 const MUTATING_PREFIXES = ['send_', 'delete_', 'create_', 'update_', 'write_', 'modify_', 'cancel_'];
 const READ_ONLY_PREFIXES = ['get_', 'read_', 'query_', 'list_', 'search_', 'fetch_'];
 

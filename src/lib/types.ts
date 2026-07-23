@@ -1,5 +1,3 @@
-// Core data schema
-
 export type DataSourceType = 'slack' | 'email' | 'jira' | 'calendar' | 'preference';
 
 export interface DataArtifact {
@@ -10,8 +8,6 @@ export interface DataArtifact {
   isPrivate: boolean;
   createdAt: string;
 }
-
-// Pipeline result shapes
 
 export interface PrivacyGateResult {
   allowed: DataArtifact[];
@@ -24,9 +20,6 @@ export interface ConflictResolutionResult {
   droppedStaleIds: string[];
 }
 
-/**
- * Global, structural preference state —> deliberately NOT keyed by topicId.
- */
 export interface UserPreferencesState {
   notes: string[];
   settings: Record<string, any>;
@@ -40,8 +33,6 @@ export interface PipelineResult {
   blockedArtifacts: DataArtifact[];
   droppedStaleIds: string[];
 }
-
-// Action governance
 
 export interface ActionPayload {
   operation: string;

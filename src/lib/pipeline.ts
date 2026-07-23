@@ -2,10 +2,7 @@ import type { DataArtifact, PipelineResult, UserPreferencesState } from './types
 import { runPrivacyGate } from './privacyGate';
 import { resolveConflicts } from './router.js';
 import {extractPreferences} from "./preferanceExtractor.js"
-/**
- * Runs the full Context Layer pipeline:
- *   ingestion buffer -> Privacy Gate -> Routing/Resolution -> prompt assembly
- */
+
 export function runPipeline(ingestionBuffer: DataArtifact[]): PipelineResult {
   const { allowed, blocked, securityExclusionCount } = runPrivacyGate(ingestionBuffer);
 
